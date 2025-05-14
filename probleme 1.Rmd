@@ -1,0 +1,208 @@
+---
+title: "Projet modèle linéaire"
+author: "Lmezouari Soufiane"
+date: "2025-03-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(ggplot2)
+library(patchwork)
+```
+
+## Q1
+
+```{r}
+dat <- read.csv("Sora.csv")
+nb_individus <- nrow(dat)
+nb_variables <- ncol(dat)
+print(nb_individus)
+print(nb_variables)
+
+```
+
+```{r}
+dat$Capture.Year <- as.factor(dat$Capture.Year)
+unique(dat$Capture.Year)
+unique(dat$Our.Guess)
+unique(dat$Actual.Sex)
+unique(dat$Age)
+
+```
+
+
+
+
+
+
+
+## Ajouter la variable Mistake et calculer le taux d'erreur
+
+```{r}
+dat$Mistake <- ifelse(dat$Our.Guess != dat$Actual.Sex, 1, 0)
+error_rate <- mean(dat$Mistake) * 100
+print(error_rate)
+
+```
+
+##A 3 juster un modèle logistique à Mistake
+```{r}
+# Charger la bibliothèque
+library(MASS)
+mod1 <- glm(Mistake ~ Age + Culmen + Tarsus + Toe + Weight + Fat.Score, 
+                     data = dat, family = binomial)
+
+summary(mod1)
+```
+
+
+##Test de significativité du modèle Rapport
+
+## 5
+###  réation de la variable combinée pour recréer la Figure 4
+```{r}
+
+dat$Group <- paste(dat$Capture.Year, dat$Actual.Sex, dat$Age, sep = "\n")
+```
+
+## Recréation de la Figure 4
+
+
+```{r}
+dat$Group <- factor(dat$Group, levels = c(
+  "2018\nMale\nAHY", "2018\nFemale\nAHY",
+  "2018\nMale\nHY",  "2018\nFemale\nHY",
+  "2020\nMale\nAHY", "2020\nFemale\nAHY",
+  "2020\nMale\nHY",  "2020\nFemale\nHY"
+))
+```
+
+
+
+```{r}
+
+plot_var <- function(var, ylab) {
+  ggplot(dat, aes(x = Group, y = .data[[var]])) +
+    geom_boxplot(coef = 1.6,outlier.shape = 4, outlier.size = 2, outlier.stroke = 0.5, 
+                 width = 0.6, fatten = 1) +
+    labs(title = ylab, x = NULL, y = ylab) +
+    theme_minimal(base_size = 12) +
+    theme(
+      axis.text.x = element_text(angle = 0, hjust = 0.5),
+      plot.title = element_text(hjust = 0.5, face = "bold"),
+      panel.grid.major.x = element_blank()
+    )
+}
+
+p1 <- plot_var("Culmen", "Culmen Length (mm)")
+p2 <- plot_var("Tarsus", "Tarsometatarsus Length (mm)")
+p3 <- plot_var("Toe", "Toe Length (mm)")
+p4 <- plot_var("Weight", "Mass (g)")
+
+(p1 | p2) / (p3 | p4)
+
+```
+
+
+##Ajuster un modèle logistique aux données datant de 2018 pour la variable Actual.Sex en fonction des variables Culmen, Tarsus, Toe, Weight et Age
+
+
+```{r}
+str(dat)
+```
+
+```{r}
+dat2 <- subset(dat, Capture.Year == "2018")
+dat2$Sex <- ifelse(dat2$Actual.Sex == "Male", 1, 0)
+mod2 <- glm(Sex ~ Culmen + Tarsus + Toe + Weight + Age, data = dat2, family = binomial)
+summary(mod2)
+
+
+```
+
+## Sélection des variables selon AIC (méthode ascendante)
+
+
+```{r}
+dat2$Actual.Sex <- factor(dat2$Actual.Sex, levels = c("Male", "Female"))
+```
+
+```{r}
+vide_mod =glm(Actual.Sex ~ 1, data = dat2, family = binomial)
+
+modele_selec_AIC=step(vide_mod, scope = list(lower = vide_mod, upper = mod2),direction = "forward",
+trace = 1)
+```
+
+
+# 10
+
+
+```{r}
+dat$Poids3 = dat$Weight^(1/3)
+mod_age = lm(Poids3 ~ Age, data = dat)
+summary(mod_age)
+
+boxplot(Poids3 ~ Age, data = dat, main = "³√Poids selon l'âge", ylab = "³√Poids", col = "orange")
+```
+
+ p-value: 0.004171 <0,05 donc il y'a une difference significative des moyennes de (poids)^1/3 selon l’age
+ 
+ 
+ ##2) Difference ou non des moyennes de (poids)^1/3 selon le sexe
+
+
+```{r}
+mod_sexe = lm(Poids3 ~ Actual.Sex, data = dat)
+summary(mod_sexe)
+boxplot(Poids3 ~ Actual.Sex, data = dat, main = "³√Poids selon le sexe", ylab = "³√Poids", col = "orange")
+```
+ 
+ 
+```{r}
+mod_année = lm(Poids3 ~ Capture.Year, data = dat)
+summary(mod_année)
+boxplot(Poids3 ~ Capture.Year, data = dat, main = "³√Poids selon l'année de capture", ylab = "³√Poids", col = "orange")
+```
+
+
+
+```{r}
+mod_culmen = lm(Poids3 ~ Culmen, data = dat)
+summary(mod_culmen)
+plot(Poids3 ~ Culmen, data = dat, main = "³√Poids en fonction de Culmen", ylab = "³√Poids", xlab = "Culmen", col = "blue")
+abline(mod_culmen, col = "red")
+```
+
+
+
+```{r}
+
+mod_tarsus = lm(Poids3 ~ Tarsus, data = dat)
+summary(mod_tarsus)
+plot(Poids3 ~ Tarsus, data = dat, main = "³√Poids en fonction de Tarsus", ylab = "³√Poids", xlab = "Tarsus", col = "blue")
+abline(mod_tarsus, col = "red")
+
+```
+## 
+```{r}
+mod_toe = lm(Poids3 ~ Toe, data = dat)
+summary(mod_toe)
+plot(Poids3 ~ Toe, data = dat, main = "³√Poids en fonction de la longueur de l'orteil", ylab = "³√Poids", xlab = "Longueur de l'orteil", col = "blue")
+abline(mod_toe, col = "red")
+```
+
+
+
+
+
+
+
+
+
+

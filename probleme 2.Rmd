@@ -1,0 +1,249 @@
+---
+title: "probleme 2"
+author: "Lmezouari Soufiane"
+date: "2025-03-16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+## Q:1
+```{r}
+dat<-read.csv("Chess.csv",stringsAsFactors = TRUE)
+head(dat)
+```
+
+```{r}
+dim(dat)
+cat("Nombre des Tournois: ",length(unique(dat$Tournoi)),"\n")
+```
+```{r}
+tous_les_joueurs <- c(dat$Blanc, dat$Noir)
+length(unique(tous_les_joueurs))
+```
+
+
+```{r}
+visdat::vis_dat(dat, warn_large_data = FALSE)
+
+```
+
+
+
+
+
+
+## 2
+
+#### Supprimer les parties qui ont terminé par une égalité
+```{r}
+dat2 <- subset(dat, Résultat != "1/2-1/2")
+```
+
+### Supprimer la modalité inutilisée "1/2-1/2" dans Résultat
+
+```{r}
+levels(dat2$Résultat)
+```
+
+```{r}
+dat2$Résultat <- droplevels(dat2$Résultat)
+levels(dat2$Résultat)
+```
+
+## 3 Ajuster deux modèles logistiques à la variable Résultat:
+
+### modele 1: 
+
+```{r}
+colnames(dat2)
+```
+
+
+```{r}
+dat2$Result_Binary <- ifelse(dat2$Résultat == "1-0", 1, 0)
+mod1 <- glm(Result_Binary ~ Blanc.Elo + Noir.Elo, data = dat2, family = binomial(link = logit))
+summary(mod1)
+
+```
+
+```{r}
+dat2$Diff_Elo <- dat2$Blanc.Elo - dat2$Noir.Elo
+
+mod2 <- glm(Result_Binary ~ Diff_Elo, data = dat2, family = binomial)
+summary(mod2)
+
+```
+
+```{r}
+AIC(mod1, mod2)
+BIC(mod1, mod2)
+```
+
+mod1 (avec Blanc.Elo et Noir.Elo séparément) a un AIC et un BIC plus faibles que mod2 (avec seulement Diff_Elo).
+
+Cela signifie que mod1 est statistiquement meilleur
+
+
+
+## 4
+
+```{r}
+library(aod)
+
+coefs <- coef(mod1)
+vcov_mod1 <- vcov(mod1)
+wald.test(b = coefs, Sigma = vcov_mod1, L = matrix(c(0, 1,1), nrow = 1))
+
+```
+## 5
+
+```{r}
+summary(mod2)
+```
+
+
+
+
+
+
+
+
+
+## 6
+
+```{r}
+# Tracer le diagramme en boîte horizontal
+
+boxplot(Diff_Elo ~ Résultat, 
+        data = dat2,
+        horizontal = TRUE,
+        col = c("#9C89B8", "#F0A6CA"),  
+        border = "gray30",
+        xlab = "Blanc.Elo - Noir.Elo",
+        ylab = "Résultat",
+        frame.plot = FALSE,             
+        las = 1,                        
+        cex.lab = 1.2,                  
+        cex.axis = 0.9                
+)
+
+```
+
+
+
+## 7
+  
+
+
+```{r}
+boxplot(Diff_Elo ~ Résultat, 
+        data = dat2,
+        horizontal = TRUE,
+        col = c("#9C89B8", "#F0A6CA"),  
+        border = "gray30",
+        xlab = "Blanc.Elo - Noir.Elo",
+        ylab = "Résultat",
+        frame.plot = FALSE,             
+        las = 1,                        
+        cex.lab = 1.2,                  
+        cex.axis = 0.9                
+)
+x_vals <- seq(-1000, 1000, length.out = 500)
+
+log_odds <- predict(mod2, newdata = data.frame(Diff_Elo = x_vals))
+probs <- 1 / (1 + exp(-log_odds))
+lines(x_vals, probs * (2 - 1) + 1, col = "red", lwd = 2)
+legend("topright", legend = "Proba victoire blancs", col = "red", lwd = 2)
+
+```
+\
+## 8
+
+```{r}
+levels(dat$Résultat)
+```
+```{r}
+levels(dat$Résultat) <- c("pas égalité", "pas égalité", "égalité")
+table(dat$Résultat)
+```
+## 9
+
+```{r}
+dat$Maitre<-ifelse(dat$Blanc.Elo> 2200 & dat$Noir.Elo>2200,1,0)
+```
+
+
+```{r}
+dat$Maitre<-factor(dat$Maitre,levels =c(0,1),labels=c("Non-Maitre","Maitre"))
+```
+
+```{r}
+tab=table(dat$Maitre,dat$Résultat)
+tab
+```
+
+
+
+## 10
+
+```{r}
+epitools::oddsratio.wald(tab)
+```
+
+## 11
+
+
+
+
+
+
+```{r}
+
+dat$Diff <- dat$Blanc.Elo - dat$Noir.Elo
+boxplot(Diff ~ Résultat, 
+        data = dat,
+        horizontal = TRUE,
+        col = c("violet", "cyan"),
+        # main = "Différence d’Elo selon que la partie ait été une égalité ou pas",
+        xlab = "Blanc.Elo - Noir.Elo",
+        ylab = "Résultat (égalité / pas égalité)")
+
+```
+
+
+
+## 12
+
+
+
+```{r}
+dat2$Diff <- dat2$Blanc.Elo - dat2$Noir.Elo
+
+model <- glm(Résultat ~ Diff + I(Diff^2), data = dat2, family = binomial)
+
+x <- seq(min(dat2$Diff), max(dat2$Diff), length.out = 100)
+y <- predict(model, newdata = data.frame(Diff = x), type = "response")
+
+boxplot(Diff ~ Résultat, data = dat2, horizontal = TRUE, col = c("blue", "yellow"),
+        main = "Différence d'Elo selon le Résultat", xlab = "Différence d'Elo")
+
+par(new = TRUE)
+plot(x, y, type = "l", col = "red", lwd = 2, axes = FALSE, xlab = "", ylab = "")
+axis(4)
+mtext("Probabilité d'Égalité", side = 4, line = 2)
+
+```
+
+
+
+
+
+
+
+
+

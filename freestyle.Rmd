@@ -1,0 +1,786 @@
+---
+
+author: "Lmezouari Soufiane"
+date: "2025-03-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#bibliothèques
+```{r}
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(car)
+library(reshape2)
+library(dplyr)
+library(gridExtra)
+library(FactoMineR)
+library(factoextra)
+
+```
+`
+
+
+
+
+```{r}
+dat<-read.csv("laptop_prices.csv")
+head(dat)
+```
+
+```{r}
+class(dat)
+```
+```{r}
+dim(dat)
+```
+```{r}
+str(dat)
+```
+
+```{r}
+visdat::vis_dat(dat) # visualisation 
+```
+
+
+```{r}
+VIM::aggr(dat)
+```
+
+
+
+```{r}
+colnames(dat)
+```
+
+
+```{r}
+sum(is.na(dat$SecondaryStorageType))
+```
+
+```{r}
+summary(dat)
+```
+
+
+
+```{r}
+num_duplicates <- sum(duplicated(dat))
+cat(sprintf("Duplicated: %d\n", num_duplicates))
+
+```
+## distribution de prix 
+
+```{r}
+ggplot(dat, aes(x = Price_euros)) +
+  geom_histogram(fill = "orange", color = "black", bins = 30) +theme_minimal()+
+  labs(title = "Distribution des Prix des Laptops",
+       x = "Prix en Euros",
+       y = "Fréquence")
+
+```
+## apllication de la transformation logarithme 
+```{r}
+dat$log_price <- log(dat$Price_euros)
+
+# Histogramme du prix transformé (log)
+ggplot(dat, aes(x = log_price)) +
+  geom_histogram(fill = "#6666FF", color = "black", bins = 30) +
+  labs(title = "Distribution Log-transformée des Prix des Laptops",
+       x = "log(Prix en Euros)",
+       y = "Fréquence")
+```
+
+
+
+## test de normalité 
+
+
+```{r}
+shapiro.test(dat$log_price)
+```
+```{r}
+qqnorm((dat$log_price))
+qqline(dat$log_price, col = "red")
+```
+
+
+Même si le test de Shapiro détecte une légère non-normalité (à cause de la taille de l’échantillon), la log-transformation améliore clairement la normalité. 
+
+
+
+
+
+## Visualisation 
+```{r}
+ggplot(dat, aes(x = Company, y = log_price, color = Company)) +
+  geom_point(alpha = 0.7, size = 3) +  
+  labs(
+    #title = "Répartition des prix des ordinateurs portables par marque",
+    x = "Marque",
+    y = "Prix en euros"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),  # Rotation des labels des axes X
+    legend.position = "right"  
+  )
+
+```
+
+
+
+on fait une petite recherche sur les laptops qui leur prix supérieur a 3900 car on sepcete quil soi des valuer aberrante mais en fin il sont raisonables 
+```{r}
+odri_prix_3900 <- dat[dat$Price_euros > 3900, ]
+
+ordi_prix_3900_info <- odri_prix_3900[, c("Company", "Product","Price_euros")]
+print(ordi_prix_3900_info)
+
+```
+
+
+
+
+
+
+```{r}
+company_counts <- table(dat$Company)
+company_percentages <- (company_counts / sum(company_counts)) * 100
+print(company_percentages)
+```
+
+
+
+
+```{r}
+company_percentages_df <- as.data.frame(company_percentages)
+colnames(company_percentages_df) <- c("Company", "Percentage")
+ggplot(company_percentages_df, aes(x = reorder(Company, Percentage), y = Percentage, fill = Company)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +  
+  geom_text(aes(label = paste0(round(Percentage, 1), "%")), 
+            hjust = -0.2,  
+            color = "black", size = 4) +
+  labs(
+    #title = "Répartition des entreprises dans le dataset",
+    x = "Entreprise",
+    y = "Pourcentage",
+    fill = "Entreprise"
+  ) +
+  theme_minimal()
+```
+
+
+
+
+
+
+
+## variables quantitatives 
+
+```{r}
+plot(dat$Weight, dat$log_price, main="Poids vs Prix", xlab="Poids", ylab="Prix")
+
+```
+
+```{r}
+df_numeric <- dat[sapply(dat, is.numeric)]
+cor_matrix <- cor(df_numeric, use = "complete.obs")
+library(corrplot)
+
+corrplot(
+  cor_matrix,
+  method = "circle",                              
+  type = "upper",                                 
+  tl.cex = 0.7,                                   
+  tl.col = "black",                               
+  col = colorRampPalette(c("blue", "white", "red"))(200), 
+  cl.cex = 0.8,                                   
+  addCoef.col = "black",                          
+  number.cex = 0.7                                
+)
+```
+```{r}
+df_numeric <- dat[sapply(dat, is.numeric)]
+df_numeric <- subset(df_numeric, select = -c(Price_euros, PrimaryStorage, SecondaryStorage))
+
+cor_matrix <- cor(df_numeric, use = "complete.obs")
+library(corrplot)
+corrplot(
+  cor_matrix,
+  method = "circle",
+  type = "upper",
+  tl.cex = 0.7,
+  tl.col = "black",
+  col = colorRampPalette(c("blue", "white", "red"))(200),
+  cl.cex = 0.8,
+  addCoef.col = "black",
+  number.cex = 0.7
+)
+
+```
+
+
+```{r}
+table(dat$PrimaryStorageType)
+```
+Analyse croisée par type :
+```{r}
+aggregate(log(dat$Price_euros) ~ PrimaryStorage + PrimaryStorageType, data = dat, FUN = mean)
+
+```
+## heatmaps 
+
+
+```{r}
+tab1 <- table(dat$Company, dat$TypeName)
+df1 <- as.data.frame(tab1)
+colnames(df1) <- c("Company", "TypeName", "Count")
+
+p1 <- ggplot(df1, aes(x = TypeName, y = Company, fill = Count)) +
+  geom_tile() +
+  geom_text(aes(label = Count), color = "black") +
+  scale_fill_gradient(low = "white", high = "steelblue") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +  # <- rotation
+  labs(title = "Company vs TypeName")
+
+tab2 <- table(dat$OS, dat$TypeName)
+df2 <- as.data.frame(tab2)
+colnames(df2) <- c("OS", "TypeName", "Count")
+
+p2 <- ggplot(df2, aes(x = TypeName, y = OS, fill = Count)) +
+  geom_tile() +
+  geom_text(aes(label = Count), color = "black") +
+  scale_fill_gradient(low = "white", high = "darkgreen") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +  # <- rotation
+  labs(title = "OS vs TypeName")
+
+
+tab3 <- table(dat$CPU_company, dat$GPU_company)
+df3 <- as.data.frame(tab3)
+colnames(df3) <- c("CPU", "GPU", "Count")
+
+p3 <- ggplot(df3, aes(x = GPU, y = CPU, fill = Count)) +
+  geom_tile() +
+  geom_text(aes(label = Count), color = "black") +
+  scale_fill_gradient(low = "white", high = "darkorange") +
+  theme_minimal() +
+  labs(title = "CPU_company vs GPU_company")
+
+grid.arrange(p1, p2, p3, ncol = 3)
+
+```
+
+
+
+
+## Anova + boxplots
+```{r}
+ggplot(dat, aes(x = interaction(PrimaryStorageType, PrimaryStorage), y = log_price, fill = PrimaryStorageType)) +
+  geom_boxplot(alpha = 0.6, color = "black") +
+  labs(
+    #title = "Prix Log selon Type et Capacité de Stockage",
+    x = "Type de Stockage + Capacité",
+    y = "log(Prix en Euros)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+```{r}
+anova_primaty_storage <- aov(log_price ~ PrimaryStorage, data = dat)
+summary(anova_primaty_storage)
+```
+
+
+`
+```{r}
+ggplot(dat, aes(x = Screen, y = log_price, fill = Screen)) +
+  geom_boxplot() +
+  labs(
+    #title = "Boxplot du Prix Log-transformé selon le Type d'Écran",
+    x = "Type d'Écran",
+    y = "log(Prix en Euros)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+```
+```{r}
+anova_scren <- aov(log_price ~ Screen, data = dat)
+summary(anova_scren)
+```
+
+
+### Touchscreen
+```{r}
+
+ggplot(dat, aes(x = Touchscreen, y = log_price, fill = Touchscreen)) +
+  geom_boxplot(alpha = 0.6, color = "black") +
+  scale_fill_manual(values = c("No" = "#CCCCFF", "Yes" = "blue")) +
+  labs(
+    #title = "Prix Log selon Écran Tactile",
+    x = "Écran Tactile",
+    y = "log(Prix en Euros)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+```
+
+
+```{r}
+anova_touch <- aov(log_price ~ Touchscreen, data = dat)
+summary(anova_touch)
+```
+
+
+
+
+```{r}
+ggplot(dat, aes(x = IPSpanel, y = log_price, fill = IPSpanel)) +
+  geom_boxplot(alpha = 0.6, color = "black") +
+  scale_fill_manual(values = c("No" = "#9999FF", "Yes" = "blue")) +
+  labs(
+    #title = "Prix Log selon présence d’un Panneau IPS",
+    x = "IPS Panel",
+    y = "log(Prix en Euros)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+```
+```{r}
+anova_ips <- aov(log_price ~ IPSpanel, data = dat)
+summary(anova_ips)
+
+```
+
+```{r}
+ggplot(dat, aes(x = Company, y = Price_euros)) +
+  geom_boxplot(aes(fill = Company), alpha = 0.7) +  # Ajouter des couleurs et ajuster l'opacité
+  labs(title = "Distribution des prix par entreprise",
+       x = "Entreprise",
+       y = "Prix en euros") +
+  theme_minimal() +  # Utiliser un thème simple
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Incliner les labels pour une meilleure lisibilité
+
+```
+
+
+
+### anova croisés 
+
+
+```{r}
+anova_inter <- aov(log_price ~ Touchscreen * IPSpanel, data = dat)
+summary(anova_inter)
+
+```
+
+##AFC
+
+```{r}
+table_afc <- table(dat$Company, dat$TypeName)
+
+res.afc <- CA(table_afc, graph = FALSE)
+fviz_ca_biplot(res.afc, repel = TRUE)
+```
+Dim1 (57.6%) et Dim2 (33.5%)  ensemble, ils expliquent 91.1% de l’inertie, ce qui est excellent !
+
+
+
+
+## reg
+
+simple models 
+
+```{r}
+mod0<-lm(log_price~.,data=dat)
+summary(mod0)
+```
+
+
+
+## mod1
+```{r}
+dat3 <- dat  
+
+dat3$Touchscreen <- ifelse(tolower(dat3$Touchscreen) == "yes", 1, 0)
+dat3$IPSpanel <- ifelse(tolower(dat3$IPSpanel) == "yes", 1, 0)
+dat3$RetinaDisplay <- ifelse(tolower(dat3$RetinaDisplay) == "yes", 1, 0)
+
+dat3$SecondaryStorageType[dat3$SecondaryStorageType == "No"] <- "None"
+
+dat3$Product <- NULL
+
+dat3$log_price <- log(dat3$Price_euros)
+
+```
+
+```{r}
+model3 <- lm(log_price ~ Ram + CPU_freq + Inches + ScreenW + ScreenH +
+               Touchscreen + IPSpanel + RetinaDisplay +
+               PrimaryStorage + SecondaryStorage +
+               Company + TypeName + OS + PrimaryStorageType + SecondaryStorageType,
+             data = dat3)
+
+summary(model3)
+
+```
+
+
+```{r}
+res <- resid(model3)
+fitted <- fitted(model3)
+
+par(mfrow = c(1, 2))
+plot(fitted, res, 
+     main = "Résidus vs Valeurs ajustées",
+     xlab = "Valeurs ajustées", ylab = "Résidus",
+     pch = 20, col = "orange")
+abline(h = 0, col = "red", lty = 2)
+
+qqnorm(res, main = "Q-Q plot des résidus", col = "orange")
+qqline(res, col = "red", lwd = 2)
+
+```
+
+
+```{r}
+shapiro.test(res)
+```
+La p-value < 0.05 → on rejette l’hypothèse de normalité parfaite 
+
+Mais : la valeur de W est très proche de 1 → les écarts à la normalité sont faibles
+
+Le Q-Q plot confirme visuellement que les résidus sont presque normaux, sauf pour quelques valeurs extrêmes.
+
+
+
+
+
+## step
+
+
+
+```{r}
+modele_complet <- lm(log_price ~ ., data = dat3)
+
+```
+
+
+aic 
+
+## Sélection avec AIC (méthode descendante)
+
+```{r}
+modele_selec_AIC_desc <- step(modele_complet)
+```
+
+## . Sélection avec AIC (méthode ascendante)
+
+```{r}
+modele_vide <- lm(log_price ~ 1, data = dat3)
+modele_selec_AIC_asc <- step(modele_vide,
+                             direction = "forward",
+                             scope = list(upper = modele_complet))
+
+```
+
+## Sélection avec BIC (méthode descendante)
+
+
+```{r}
+modele_selec_BIC_desc <- step(modele_complet,
+                              k = log(nrow(dat3)))
+```
+
+## sélection avec BIC (méthode ascendante)
+
+```{r}
+modele_selec_BIC_asc <- step(modele_vide,
+                             direction = "forward",
+                             scope = list(upper = modele_complet),
+                             k = log(nrow(dat3)))
+
+```
+
+```{r}
+AIC(modele_selec_AIC_asc)
+AIC(modele_selec_AIC_desc)
+BIC(modele_selec_BIC_asc)
+BIC(modele_selec_BIC_desc)
+```
+
+
+
+les deux methode choisi la meme modele 
+
+
+```{r}
+summary(modele_selec_AIC_asc)  
+summary(modele_selec_BIC_asc)  
+```
+
+```{r}
+
+pred <- predict(modele_selec_AIC_asc)  
+
+obs <- dat3$log_price
+
+# Graphique
+plot(obs, pred,
+     xlab = "Valeurs observées (log_price)",
+     ylab = "Valeurs prédites",
+     main = "Prédictions vs Observations",
+     pch = 20, col = "dodgerblue")
+abline(a = 0, b = 1, col = "red", lwd = 2, lty = 2)  
+
+
+```
+
+
+
+
+## 
+
+
+```{r}
+supp<- c("CPU_model", "GPU_model", "Price_euros")  
+dat4 <- dat3[, !(names(dat3) %in% supp)]
+
+set.seed(123)
+n <- nrow(dat4)
+train_indices <- sample(1:n, size = 0.8 * n)
+train <- dat4[train_indices, ]
+test  <- dat4[-train_indices, ]
+
+modele_complet_train <- lm(log_price ~ ., data = train)
+modele_vide_train <- lm(log_price ~ 1, data = train)
+
+modele_AIC_train <- step(modele_vide_train,
+                         direction = "forward",
+                         scope = list(upper = modele_complet_train))
+
+modele_BIC_train <- step(modele_vide_train,
+                         direction = "forward",
+                         scope = list(upper = modele_complet_train),
+                         k = log(nrow(train)))
+```
+```{r}
+pred <- predict(modele_AIC_train) 
+obs2 <- train$log_price
+
+plot(obs2, pred,
+     xlab = "Valeurs observées (log_price)",
+     ylab = "Valeurs prédites",
+     main = "Prédictions vs Observations - AIC (apprentissage)",
+     pch = 20, col = "dodgerblue")
+abline(a = 0, b = 1, col = "red", lwd = 2, lty = 2)
+
+
+```
+
+
+
+```{r}
+summary(modele_AIC_train)
+```
+
+```{r}
+summary(modele_BIC_train)
+```
+
+```{r}
+prepare_test_data <- function(model, train, test) {
+  vars <- all.vars(formula(model))
+  test_sub <- test[, vars, drop = FALSE]
+  for (col in names(test_sub)) {
+    if (is.factor(train[[col]])) {
+      test_sub[[col]] <- factor(test_sub[[col]], levels = levels(train[[col]]))
+    }
+  }
+  return(test_sub)
+}
+
+test_aic <- prepare_test_data(modele_AIC_train, train, test)
+test_bic <- prepare_test_data(modele_BIC_train, train, test)
+pred_AIC <- predict(modele_AIC_train, newdata = test_aic)
+pred_BIC <- predict(modele_BIC_train, newdata = test_bic)
+obs_test <- test$log_price
+
+rmse <- function(y, y_pred) {
+  sqrt(mean((y - y_pred)^2, na.rm = TRUE))
+}
+rmse_AIC <- rmse(obs_test, pred_AIC)
+rmse_BIC <- rmse(obs_test, pred_BIC)
+cat("RMSE AIC :", round(rmse_AIC, 4), "\n")
+cat("RMSE BIC :", round(rmse_BIC, 4), "\n")
+
+```
+
+
+
+
+```{r}
+# 1. Tracer prédictions vs observations (log_price)
+plot(obs_test, pred_BIC,
+     xlab = "Valeurs observées (log_price)",
+     ylab = "Valeurs prédites (log_price)",
+     main = "Prédictions vs Observations - Modèle BIC (test) ",
+     pch = 20, col = "royalblue")
+abline(0, 1, col = "red", lwd = 2, lty = 2)
+
+```
+
+
+
+```{r}
+residus_bic <- obs_test - pred_BIC
+
+plot(pred_BIC, residus_bic,
+     xlab = "Valeurs prédites (log_price)",
+     ylab = "Résidus",
+     main = "Résidus vs Prédictions - Modèle BIC",
+     pch = 20, col = "orange")
+abline(h = 0, col = "red", lty = 2)
+
+```
+
+
+
+```{r}
+obs_test_euros <- exp(obs_test)
+pred_BIC_euros <- exp(pred_BIC)
+
+plot(obs_test_euros, pred_BIC_euros,
+     xlab = "Valeurs observées (euros)",
+     ylab = "Valeurs prédites (euros)",
+     main = "Prédictions vs Observations en euros - Modèle BIC",
+     pch = 20, col = "darkgreen")
+abline(0, 1, col = "red", lwd = 2, lty = 2)
+
+```
+
+
+
+## # Création de la variable PPI dans dat3  
+
+```{r}
+dat3$PPI <- sqrt(dat3$ScreenW^2 + dat3$ScreenH^2) / dat3$Inches
+```
+
+
+
+```{r}
+model_ppi <- lm(log_price ~ Ram + CPU_freq + Inches + PPI + 
+                  Touchscreen + IPSpanel + RetinaDisplay + 
+                  PrimaryStorage + SecondaryStorage +
+                  Company + TypeName + OS + PrimaryStorageType + SecondaryStorageType,
+                data = dat3)
+summary(model_ppi)
+```
+
+
+
+
+
+
+
+## gerrer le problem de storage
+#### créer StorageScore
+
+```{r}
+# SSD = 2, HDD = 1, Hybrid = 1.5, None = 0
+score_type <- function(x) {
+  ifelse(x == "SSD", 2,
+         ifelse(x == "HDD", 1,
+                ifelse(x == "Hybrid", 1.5, 0)))
+}
+
+ssd_score1 <- score_type(dat3$PrimaryStorageType)
+ssd_score2 <- score_type(dat3$SecondaryStorageType)
+dat3$StorageScore <- dat3$PrimaryStorage * ssd_score1 + dat3$SecondaryStorage * ssd_score2
+
+```
+
+```{r}
+modele_storage <- lm(log_price ~ StorageScore + PPI + Ram + CPU_freq + 
+                     Inches + Touchscreen + IPSpanel + RetinaDisplay +
+                     Company + TypeName + OS,
+                     data = dat3)
+
+summary(modele_storage)
+
+```
+
+
+### GPU
+
+```{r}
+
+dat3$GPU_perf <- with(dat3, ifelse(grepl("HD Graphics|UHD", GPU_model), "Faible",
+                            ifelse(grepl("MX|Radeon 530|Radeon 5|940MX", GPU_model), "Moyen",
+                            ifelse(grepl("GTX|RTX|Quadro", GPU_model), "Haut", "Autre"))))
+
+dat3$GPU_perf <- factor(dat3$GPU_perf, levels = c("Faible", "Moyen", "Haut", "Autre"))
+
+```
+
+
+```{r}
+table(dat3$GPU_perf)
+```
+
+
+
+```{r}
+
+modele_gpu_perf <- lm(log_price ~ GPU_perf + StorageScore + PPI + Ram + CPU_freq +
+                      Inches + Touchscreen + IPSpanel + RetinaDisplay +
+                      Company + TypeName + OS,
+                      data = dat3)
+
+summary(modele_gpu_perf)
+
+```
+
+
+
+
+
+
+```{r}
+pred_gpu <- predict(modele_gpu_perf, newdata = dat3)
+
+obs_gpu <- dat3$log_price
+rmse <- function(y, y_pred) {
+  sqrt(mean((y - y_pred)^2, na.rm = TRUE))
+}
+
+rmse_gpu <- rmse(obs_gpu, pred_gpu)
+
+cat("RMSE du modèle avec GPU_perf :", round(rmse_gpu, 4), "\n")
+
+```
+
+```{r}
+plot(obs_gpu, pred_gpu,
+     xlab = "Valeurs observées (log_price)",
+     ylab = "Valeurs prédites (log_price)",
+     main = "Prédictions vs Observations - Modèle BIC ",
+     pch = 20, col = "royalblue")
+abline(0, 1, col = "red", lwd = 2, lty = 2)
+
+```
